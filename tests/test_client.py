@@ -1,23 +1,18 @@
-import uuid
 import os
-import time
 import threading
+import time
+import uuid
+
+import pytest
 from dotenv import load_dotenv
 
 from memgpt import Admin, create_client
 from memgpt.constants import DEFAULT_PRESET
-from memgpt.data_types import Preset  # TODO move to PresetModel
-from dotenv import load_dotenv
-
-from tests.config import TestMGPTConfig
-
 from memgpt.credentials import MemGPTCredentials
+from memgpt.data_types import Preset  # TODO move to PresetModel
 from memgpt.data_types import EmbeddingConfig, LLMConfig
-from .utils import wipe_config, wipe_memgpt_home
-
-
-import pytest
-import uuid
+from memgpt.settings import settings
+from tests.config import TestMGPTConfig
 
 test_agent_name = f"test_client_{str(uuid.uuid4())}"
 # test_preset_name = "test_preset"
@@ -36,15 +31,12 @@ test_server_token = "test_server_token"
 
 
 def run_server():
-    import uvicorn
-    from memgpt.server.rest_api.server import app
-    from memgpt.server.rest_api.server import start_server
+    pass
 
     load_dotenv()
 
     # Use os.getenv with a fallback to os.environ.get
-    db_url = os.getenv("MEMGPT_PGURI") or os.environ.get("MEMGPT_PGURI")
-    assert db_url, "Missing MEMGPT_PGURI"
+    db_url = settings.pg_uri
 
     if os.getenv("OPENAI_API_KEY"):
         config = TestMGPTConfig(
@@ -98,7 +90,9 @@ def run_server():
     config.save()
     credentials.save()
 
-    print("Starting server...")
+    from memgpt.server.rest_api.server import start_server
+
+    print("Starting server...", config.config_path)
     start_server(debug=True)
 
 
@@ -106,7 +100,7 @@ def run_server():
 @pytest.fixture(
     params=[
         {"base_url": local_service_url},
-        {"base_url": docker_compose_url},  # TODO: add when docker compose added to tests
+        # {"base_url": docker_compose_url},  # TODO: add when docker compose added to tests
         # {"base_url": None} # TODO: add when implemented
     ],
     scope="module",
@@ -124,17 +118,18 @@ def client(request):
 
         admin = Admin(request.param["base_url"], test_server_token)
         response = admin.create_user(test_user_id)  # Adjust as per your client's method
-        user_id = response.user_id
+        response.user_id
         token = response.api_key
     else:
         token = None
 
     client = create_client(**request.param, token=token)  # This yields control back to the test function
-    yield client
-
-    # cleanup user
-    if request.param["base_url"]:
-        admin.delete_user(test_user_id)  # Adjust as per your client's method
+    try:
+        yield client
+    finally:
+        # cleanup user
+        if request.param["base_url"]:
+            admin.delete_user(test_user_id)  # Adjust as per your client's method
 
 
 # Fixture for test agent
@@ -271,7 +266,8 @@ def test_sources(client, agent):
 
     # load a file into a source
     filename = "CONTRIBUTING.md"
-    response = client.load_file_into_source(filename=filename, source_id=source.id)
+    upload_job = client.load_file_into_source(filename=filename, source_id=source.id)
+    print("Upload job", upload_job, upload_job.status, upload_job.metadata)
 
     # TODO: make sure things run in the right order
     archival_memories = client.get_agent_archival_memory(agent_id=agent.id).archival_memory
@@ -334,7 +330,6 @@ def test_presets(client, agent):
     # List all presets and make sure the preset is NOT in the list
     all_presets = client.list_presets()
     assert new_preset.id not in [p.id for p in all_presets], (new_preset, all_presets)
-
     # Create a preset
     client.create_preset(preset=new_preset)
 
