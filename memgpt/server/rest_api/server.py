@@ -39,10 +39,6 @@ Start the server with:
   cd memgpt/server/rest_api
   poetry run uvicorn server:app --reload
 """
-config = MemGPTConfig.load()
-for memory_type in ("archival", "recall", "metadata"):
-    setattr(config, f"{memory_type}_storage_uri", settings.pg_uri)
-config.save()
 
 interface: QueuingInterface = QueuingInterface()
 server: SyncServer = SyncServer(default_interface=interface)
@@ -93,7 +89,9 @@ app.include_router(setup_agents_message_router(server, interface, password), pre
 app.include_router(setup_humans_index_router(server, interface, password), prefix=API_PREFIX)
 app.include_router(setup_personas_index_router(server, interface, password), prefix=API_PREFIX)
 app.include_router(setup_models_index_router(server, interface, password), prefix=API_PREFIX)
-app.include_router(setup_tools_index_router(server, interface, password), prefix=API_PREFIX)
+app.include_router(
+    setup_tools_index_router(server, interface, password), prefix=API_PREFIX, dependencies=[Depends(verify_password)]
+)  # admin only
 app.include_router(setup_sources_index_router(server, interface, password), prefix=API_PREFIX)
 app.include_router(setup_presets_index_router(server, interface, password), prefix=API_PREFIX)
 
