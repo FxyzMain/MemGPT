@@ -209,7 +209,7 @@ async def create_source(user_api_key: str, agent_id: str):
 async def upload_to_source(user_api_key: str, source_id):
     url = f"http://localhost:8283/api/sources/{source_id}/upload"
 
-    files = { "file": ("fxyzNetwork.pdf", open("fxyzNetwork.pdf", "rb"), "application/pdf") }
+    files = { "file": ("FxyzNetworkAll.pdf", open("fxyzNetwork.pdf", "rb"), "application/pdf") }
     headers = {
         "accept": "application/json",
         "authorization": f"Bearer {user_api_key}"

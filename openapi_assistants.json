@@ -2997,6 +2997,78 @@
         ],
         "title": "InsertAgentArchivalMemoryResponse"
       },
+      "JobModel": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "The unique identifier of the job."
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobStatus"
+              }
+            ],
+            "description": "The status of the job.",
+            "default": "created"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "The unix timestamp of when the job was created."
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At",
+            "description": "The unix timestamp of when the job was completed."
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id",
+            "description": "The unique identifier of the user associated with the job."
+          },
+          "metadata_": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata ",
+            "description": "The metadata of the job.",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "JobModel"
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "created",
+          "running",
+          "completed",
+          "failed"
+        ],
+        "title": "JobStatus"
+      },
       "LLMConfigModel": {
         "properties": {
           "model": {
@@ -4424,35 +4496,6 @@
         ],
         "title": "UpdateAgentMemoryResponse"
       },
-      "UploadFileToSourceResponse": {
-        "properties": {
-          "source": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SourceModel"
-              }
-            ],
-            "description": "The source the file was uploaded to."
-          },
-          "added_passages": {
-            "type": "integer",
-            "title": "Added Passages",
-            "description": "The number of passages added to the source."
-          },
-          "added_documents": {
-            "type": "integer",
-            "title": "Added Documents",
-            "description": "The number of documents added to the source."
-          }
-        },
-        "type": "object",
-        "required": [
-          "source",
-          "added_passages",
-          "added_documents"
-        ],
-        "title": "UploadFileToSourceResponse"
-      },
       "UserMessageRequest": {
         "properties": {
           "message": {
@@ -4555,7 +4598,13 @@
   },
   "servers": [
     {
+      "url": "http://memgpt.localhost"
+    },
+    {
       "url": "http://localhost:8283"
+    },
+    {
+      "url": "http://localhost:8083"
     }
   ]
 }
