@@ -47,8 +47,7 @@ async def create_memgpt_user(telegram_user_id: int):
             await save_user_agent_id(telegram_user_id, agent_id)
             # Save MemGPT user ID and API key in Supabase
             await save_memgpt_user_id_and_api_key(telegram_user_id, user_memgpt_id, user_api_key)
-            # Insert archival memory about the project
-            # await insert_archival(agent_id)
+            
 
             # Create and attach source to the agent
             source_id = await create_source(user_api_key, agent_id)
@@ -159,7 +158,7 @@ async def create_agent(telegram_user_id: int, agent_name: str):
 
         agent_id = await name_to_id(agents_info, agent_name)
 
-        # await insert_archival(agent_id)
+        
 
         source_id = await get_source_id(telegram_user_id)
         print 
@@ -169,18 +168,6 @@ async def create_agent(telegram_user_id: int, agent_name: str):
     else:
         return "Failed to create MemGPT agent."
 
-async def insert_archival(agent_id: str):
-    url = f"http://localhost:8283/api/agents/{agent_id}/archival"
-    
-    payload = {
-     "content": string }
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "authorization": f"Bearer {MEMGPT_ADMIN_API_KEY}"
-    }
-
-    response = requests.post(url, json=payload, headers=headers)
 
 async def create_source(user_api_key: str, agent_id: str):
 
@@ -209,7 +196,7 @@ async def create_source(user_api_key: str, agent_id: str):
 async def upload_to_source(user_api_key: str, source_id):
     url = f"http://localhost:8283/api/sources/{source_id}/upload"
 
-    files = { "file": ("FxyzNetworkAll.pdf", open("fxyzNetwork.pdf", "rb"), "application/pdf") }
+    files = { "file": ("fxyzNetwork.pdf", open("fxyzNetwork.pdf", "rb"), "application/pdf") }
     headers = {
         "accept": "application/json",
         "authorization": f"Bearer {user_api_key}"
