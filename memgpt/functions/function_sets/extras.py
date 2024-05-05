@@ -1,18 +1,18 @@
-from typing import Optional
-import os
 import json
-import requests
+import os
 import uuid
+from typing import Optional
+
+import requests
 
 from memgpt.constants import (
+    JSON_ENSURE_ASCII,
     JSON_LOADS_STRICT,
     MESSAGE_CHATGPT_FUNCTION_MODEL,
     MESSAGE_CHATGPT_FUNCTION_SYSTEM_MESSAGE,
-    MAX_PAUSE_HEARTBEATS,
-    JSON_ENSURE_ASCII,
 )
-from memgpt.llm_api.llm_api_tools import create
 from memgpt.data_types import Message
+from memgpt.llm_api.llm_api_tools import create
 
 
 def message_chatgpt(self, message: str):
@@ -31,6 +31,7 @@ def message_chatgpt(self, message: str):
         Message(user_id=dummy_user_id, agent_id=dummy_agent_id, role="system", text=MESSAGE_CHATGPT_FUNCTION_SYSTEM_MESSAGE),
         Message(user_id=dummy_user_id, agent_id=dummy_agent_id, role="user", text=str(message)),
     ]
+    # TODO: this will error without an LLMConfig
     response = create(
         model=MESSAGE_CHATGPT_FUNCTION_MODEL,
         messages=message_sequence,

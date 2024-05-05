@@ -1,11 +1,9 @@
-from urllib.parse import urljoin
-import requests
 from typing import Tuple
+from urllib.parse import urljoin
 
 from memgpt.local_llm.settings.settings import get_completions_settings
 from memgpt.local_llm.utils import post_json_auth_request
 from memgpt.utils import count_tokens
-
 
 API_CHAT_SUFFIX = "/v1/chat/completions"
 # LMSTUDIO_API_COMPLETIONS_SUFFIX = "/v1/completions"
@@ -28,6 +26,26 @@ def get_groq_completion(endpoint: str, auth_type: str, auth_key: str, model: str
             # "top_p",
             # "stream",
             # "stop",
+            # Groq only allows 4 stop tokens
+            "stop": [
+                "\nUSER",
+                "\nASSISTANT",
+                "\nFUNCTION",
+                # "\nFUNCTION RETURN",
+                # "<|im_start|>",
+                # "<|im_end|>",
+                # "<|im_sep|>",
+                # # airoboros specific
+                # "\n### ",
+                # # '\n' +
+                # # '</s>',
+                # # '<|',
+                # "\n#",
+                # # "\n\n\n",
+                # # prevent chaining function calls / multi json objects / run-on generations
+                # # NOTE: this requires the ability to patch the extra '}}' back into the prompt
+                "  }\n}\n",
+            ]
         }
     )
 

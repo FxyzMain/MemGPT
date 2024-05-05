@@ -1,25 +1,28 @@
 """ This module contains the data types used by MemGPT. Each data type must include a function to create a DB model. """
 
-import uuid
 import json
+import uuid
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, TypeVar
+from typing import Dict, List, Optional, TypeVar
+
 import numpy as np
-from pydantic import BaseModel, Field, Json
+from pydantic import BaseModel, Field
 
 from memgpt.constants import (
     DEFAULT_HUMAN,
-    DEFAULT_MEMGPT_MODEL,
     DEFAULT_PERSONA,
-    DEFAULT_PRESET,
     LLM_MAX_TOKENS,
     MAX_EMBEDDING_DIM,
     TOOL_CALL_ID_MAX_LEN,
 )
-from memgpt.utils import get_utc_time, create_uuid_from_string
-from memgpt.models import chat_completion_response
-from memgpt.utils import get_human_text, get_persona_text, printd, is_utc_datetime
-from memgpt.local_llm.constants import INNER_THOUGHTS_KWARG, INNER_THOUGHTS_KWARG_DESCRIPTION
+from memgpt.local_llm.constants import INNER_THOUGHTS_KWARG
+from memgpt.utils import (
+    create_uuid_from_string,
+    get_human_text,
+    get_persona_text,
+    get_utc_time,
+    is_utc_datetime,
+)
 
 
 class Record:
@@ -75,10 +78,10 @@ class Message(Record):
 
     def __init__(
         self,
-        user_id: uuid.UUID,
-        agent_id: uuid.UUID,
         role: str,
         text: str,
+        user_id: Optional[uuid.UUID] = None,
+        agent_id: Optional[uuid.UUID] = None,
         model: Optional[str] = None,  # model used to make function call
         name: Optional[str] = None,  # optional participant name
         created_at: Optional[datetime] = None,

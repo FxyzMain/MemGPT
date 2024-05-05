@@ -1,30 +1,49 @@
 """ Metadata store for user/agent/data_source information"""
 
-import os
 import inspect as python_inspect
-import uuid
+import os
 import secrets
-from typing import Optional, List
+import traceback
+import uuid
+from typing import List, Optional
 
-from memgpt.constants import DEFAULT_HUMAN, DEFAULT_MEMGPT_MODEL, DEFAULT_PERSONA, DEFAULT_PRESET, LLM_MAX_TOKENS
-from memgpt.utils import enforce_types, printd
-from memgpt.data_types import AgentState, Source, User, LLMConfig, EmbeddingConfig, Token, Preset
-from memgpt.config import MemGPTConfig
-from memgpt.functions.functions import load_all_function_sets
-
-from memgpt.models.pydantic_models import PersonaModel, HumanModel, ToolModel
-
-from sqlalchemy import create_engine, Column, String, BIGINT, select, inspect, text, JSON, BLOB, BINARY, ARRAY, Boolean
-from sqlalchemy import func
-from sqlalchemy.orm import sessionmaker, mapped_column, declarative_base
-from sqlalchemy.orm.session import close_all_sessions
+from sqlalchemy import (
+    BIGINT,
+    CHAR,
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    String,
+    TypeDecorator,
+    create_engine,
+    func,
+)
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.exc import InterfaceError
+from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.sql import func
-from sqlalchemy import Column, BIGINT, String, DateTime
-from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy_json import mutable_json_type, MutableJson
-from sqlalchemy import TypeDecorator, CHAR
-from sqlalchemy.orm import sessionmaker, mapped_column, declarative_base
 
+from memgpt.config import MemGPTConfig
+from memgpt.data_types import (
+    AgentState,
+    EmbeddingConfig,
+    LLMConfig,
+    Preset,
+    Source,
+    Token,
+    User,
+)
+from memgpt.functions.functions import load_all_function_sets
+from memgpt.models.pydantic_models import (
+    HumanModel,
+    JobModel,
+    JobStatus,
+    PersonaModel,
+    ToolModel,
+)
+from memgpt.settings import settings
+from memgpt.utils import enforce_types, get_utc_time, printd
 
 Base = declarative_base()
 
@@ -301,21 +320,14 @@ class PresetModel(Base):
 
 
 class MetadataStore:
+    uri: Optional[str] = None
+
     def __init__(self, config: MemGPTConfig):
         # TODO: get DB URI or path
         if config.metadata_storage_type == "postgres":
             # construct URI from enviornment variables
-            if os.getenv("MEMGPT_PGURI"):
-                self.uri = os.getenv("MEMGPT_PGURI")
-            elif os.getenv("MEMGPT_PG_DB"):
-                db = os.getenv("MEMGPT_PG_DB", "memgpt")
-                user = os.getenv("MEMGPT_PG_USER", "memgpt")
-                password = os.getenv("MEMGPT_PG_PASSWORD", "memgpt")
-                port = os.getenv("MEMGPT_PG_PORT", "5432")
-                url = os.getenv("MEMGPT_PG_URL", "localhost")
-                self.uri = f"postgresql+pg8000://{user}:{password}@{url}:{port}/{db}"
-            else:
-                self.uri = config.metadata_storage_uri
+            self.uri = settings.pg_uri if settings.pg_uri else config.metadata_storage_uri
+
         elif config.metadata_storage_type == "sqlite":
             path = os.path.join(config.metadata_storage_path, "sqlite.db")
             self.uri = f"sqlite:///{path}"
@@ -323,26 +335,45 @@ class MetadataStore:
             raise ValueError(f"Invalid metadata storage type: {config.metadata_storage_type}")
 
         # Ensure valid URI
-        if not self.uri:
-            raise ValueError("Database URI is not provided or is invalid.")
+        assert self.uri, "Database URI is not provided or is invalid."
 
         # Check if tables need to be created
         self.engine = create_engine(self.uri)
-        Base.metadata.create_all(
-            self.engine,
-            tables=[
-                UserModel.__table__,
-                AgentModel.__table__,
-                SourceModel.__table__,
-                AgentSourceMappingModel.__table__,
-                TokenModel.__table__,
-                PresetModel.__table__,
-                PresetSourceMapping.__table__,
-                HumanModel.__table__,
-                PersonaModel.__table__,
-                ToolModel.__table__,
-            ],
-        )
+        try:
+            Base.metadata.create_all(
+                self.engine,
+                tables=[
+                    UserModel.__table__,
+                    AgentModel.__table__,
+                    SourceModel.__table__,
+                    AgentSourceMappingModel.__table__,
+                    TokenModel.__table__,
+                    PresetModel.__table__,
+                    PresetSourceMapping.__table__,
+                    HumanModel.__table__,
+                    PersonaModel.__table__,
+                    ToolModel.__table__,
+                    JobModel.__table__,
+                ],
+            )
+        except InterfaceError as e:
+            traceback.print_exc()
+            if config.metadata_storage_type == "postgres":
+                raise ValueError(
+                    f"{str(e)}\n\nMemGPT failed to connect to the database at URI '{self.uri}'. "
+                    + "Please make sure you configured your storage backend correctly (https://memgpt.readme.io/docs/storage). "
+                    + "\npostgres detected: Make sure the postgres database is running (https://memgpt.readme.io/docs/storage#postgres)."
+                )
+            elif config.metadata_storage_type == "sqlite":
+                raise ValueError(
+                    f"{str(e)}\n\nMemGPT failed to connect to the database at URI '{self.uri}'. "
+                    + "Please make sure you configured your storage backend correctly (https://memgpt.readme.io/docs/storage). "
+                    + "\nsqlite detected: Make sure that the sqlite.db file exists at the URI."
+                )
+            else:
+                raise e
+        except:
+            raise
         self.session_maker = sessionmaker(bind=self.engine)
 
     @enforce_types
@@ -394,6 +425,8 @@ class MetadataStore:
     def create_agent(self, agent: AgentState):
         # insert into agent table
         # make sure agent.name does not already exist for user user_id
+        assert agent.state is not None, "Agent state must be provided"
+        assert len(list(agent.state.keys())) > 0, "Agent state must not be empty"
         with self.session_maker() as session:
             if session.query(AgentModel).filter(AgentModel.name == agent.name).filter(AgentModel.user_id == agent.user_id).count() > 0:
                 raise ValueError(f"Agent with name {agent.name} already exists")
@@ -498,6 +531,20 @@ class MetadataStore:
             session.commit()
 
     @enforce_types
+    def update_human(self, human: HumanModel):
+        with self.session_maker() as session:
+            session.add(human)
+            session.commit()
+            session.refresh(human)
+
+    @enforce_types
+    def update_persona(self, persona: PersonaModel):
+        with self.session_maker() as session:
+            session.add(persona)
+            session.commit()
+            session.refresh(persona)
+
+    @enforce_types
     def delete_agent(self, agent_id: uuid.UUID):
         with self.session_maker() as session:
 
@@ -544,10 +591,10 @@ class MetadataStore:
             return [r.to_record() for r in results]
 
     @enforce_types
-    def list_tools(self, user_id: uuid.UUID) -> List[ToolModel]:
+    # def list_tools(self, user_id: uuid.UUID) -> List[ToolModel]: # TODO: add when users can creat tools
+    def list_tools(self) -> List[ToolModel]:
         with self.session_maker() as session:
             available_functions = load_all_function_sets()
-            print(available_functions)
             results = [
                 ToolModel(
                     name=k,
@@ -621,6 +668,16 @@ class MetadataStore:
                 return None
             assert len(results) == 1, f"Expected 1 result, got {len(results)}"
             return results[0].to_record()
+
+    @enforce_types
+    def get_tool(self, tool_name: str) -> Optional[ToolModel]:
+        # TODO: add user_id when tools can eventually be added by users
+        with self.session_maker() as session:
+            results = session.query(ToolModel).filter(ToolModel.name == tool_name).all()
+            if len(results) == 0:
+                return None
+            assert len(results) == 1, f"Expected 1 result, got {len(results)}"
+            return results[0]
 
     # agent source metadata
     @enforce_types
@@ -745,3 +802,31 @@ class MetadataStore:
         with self.session_maker() as session:
             session.query(PresetModel).filter(PresetModel.name == name).filter(PresetModel.user_id == user_id).delete()
             session.commit()
+
+    # job related functions
+    def create_job(self, job: JobModel):
+        with self.session_maker() as session:
+            session.add(job)
+            session.commit()
+            session.expunge_all()
+
+    def update_job_status(self, job_id: uuid.UUID, status: JobStatus):
+        with self.session_maker() as session:
+            session.query(JobModel).filter(JobModel.id == job_id).update({"status": status})
+            if status == JobStatus.COMPLETED:
+                session.query(JobModel).filter(JobModel.id == job_id).update({"completed_at": get_utc_time()})
+            session.commit()
+
+    def update_job(self, job: JobModel):
+        with self.session_maker() as session:
+            session.add(job)
+            session.commit()
+            session.refresh(job)
+
+    def get_job(self, job_id: uuid.UUID) -> Optional[JobModel]:
+        with self.session_maker() as session:
+            results = session.query(JobModel).filter(JobModel.id == job_id).all()
+            if len(results) == 0:
+                return None
+            assert len(results) == 1, f"Expected 1 result, got {len(results)}"
+            return results[0]

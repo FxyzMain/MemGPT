@@ -1,13 +1,13 @@
-from abc import ABC, abstractmethod
 import json
 import re
+from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from colorama import Fore, Style, init
 
-from memgpt.utils import printd
 from memgpt.constants import CLI_WARNING_PREFIX, JSON_LOADS_STRICT
 from memgpt.data_types import Message
+from memgpt.utils import printd
 
 init(autoreset=True)
 
@@ -154,7 +154,6 @@ class CLIInterface(AgentInterface):
 
     @staticmethod
     def function_message(msg: str, msg_obj: Optional[Message] = None, debug: bool = DEBUG):
-
         def print_function_message(icon, msg, color=Fore.RED, printf=print):
             if STRIP_UI:
                 printf(f"⚡{icon} [function] {msg}")

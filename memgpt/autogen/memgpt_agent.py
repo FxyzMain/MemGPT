@@ -1,22 +1,27 @@
-import uuid
 import sys
-from typing import Callable, Optional, List, Dict, Union, Any, Tuple
+import uuid
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from autogen.agentchat import Agent, ConversableAgent, UserProxyAgent, GroupChat, GroupChatManager
+from autogen.agentchat import (
+    Agent,
+    ConversableAgent,
+    GroupChat,
+    GroupChatManager,
+    UserProxyAgent,
+)
 
-from memgpt.metadata import MetadataStore
+import memgpt.constants as constants
+import memgpt.system as system
+import memgpt.utils as utils
 from memgpt.agent import Agent as MemGPTAgent
 from memgpt.agent import save_agent
+from memgpt.agent_store.storage import StorageConnector, TableType
 from memgpt.autogen.interface import AutoGenInterface
-import memgpt.system as system
-import memgpt.constants as constants
-import memgpt.utils as utils
-import memgpt.presets.presets as presets
+from memgpt.cli.cli_load import load_directory, load_vector_database
 from memgpt.config import MemGPTConfig
 from memgpt.credentials import MemGPTCredentials
-from memgpt.cli.cli_load import load_directory, load_vector_database
-from memgpt.agent_store.storage import StorageConnector, TableType
-from memgpt.data_types import AgentState, User, LLMConfig, EmbeddingConfig
+from memgpt.data_types import EmbeddingConfig, LLMConfig, User
+from memgpt.metadata import MetadataStore
 from memgpt.utils import get_human_text, get_persona_text
 
 
@@ -73,7 +78,9 @@ class MemGPTConversableAgent(ConversableAgent):
 
     def attach(self, data_source: str):
         # attach new data
-        attach(agent_name=self.agent.agent_state.name, data_source=data_source)
+        config = MemGPTConfig.load()
+        source_connector = StorageConnector.get_storage_connector(TableType.PASSAGES, config, user_id=self.agent.agent_state.user_id)
+        self.agent.attach_source(data_source, source_connector, ms=self.ms)
 
     def load_and_attach(self, name: str, type: str, force=False, **kwargs):
         # check if data source already exists

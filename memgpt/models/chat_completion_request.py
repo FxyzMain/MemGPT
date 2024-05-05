@@ -1,5 +1,6 @@
-from typing import List, Union, Optional, Dict, Literal, Any
-from pydantic import BaseModel, Field, Json
+from typing import Any, Dict, List, Literal, Optional, Union
+
+from pydantic import BaseModel, Field
 
 
 class SystemMessage(BaseModel):
@@ -41,6 +42,7 @@ class ToolMessage(BaseModel):
 ChatMessage = Union[SystemMessage, UserMessage, AssistantMessage, ToolMessage]
 
 
+# TODO: this might not be necessary with the validator
 def cast_message_to_subtype(m_dict: dict) -> ChatMessage:
     """Cast a dictionary to one of the individual message types"""
     role = m_dict.get("role")

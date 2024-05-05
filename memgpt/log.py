@@ -1,14 +1,15 @@
+import logging
 import os
 import os.path
-import logging
 from logging.handlers import RotatingFileHandler
+
 from memgpt.constants import (
-    LOGGER_NAME,
     LOGGER_DEFAULT_LEVEL,
     LOGGER_DIR,
-    LOGGER_FILENAME,
     LOGGER_FILE_BACKUP_COUNT,
+    LOGGER_FILENAME,
     LOGGER_MAX_FILE_SIZE,
+    LOGGER_NAME,
 )
 
 # Checking if log directory exists

@@ -1,17 +1,22 @@
-from typing import List
 import os
-from memgpt.data_types import AgentState, Preset
-from memgpt.interface import AgentInterface
-from memgpt.presets.utils import load_all_presets, is_valid_yaml_format, load_yaml_file
-from memgpt.utils import get_human_text, get_persona_text, printd, list_human_files, list_persona_files
-from memgpt.prompts import gpt_system
-from memgpt.functions.functions import load_all_function_sets
-from memgpt.metadata import MetadataStore
-from memgpt.constants import DEFAULT_HUMAN, DEFAULT_PERSONA, DEFAULT_PRESET
-from memgpt.models.pydantic_models import HumanModel, PersonaModel
-
 import uuid
+from typing import List
 
+from memgpt.constants import DEFAULT_HUMAN, DEFAULT_PERSONA
+from memgpt.data_types import AgentState, Preset
+from memgpt.functions.functions import load_all_function_sets
+from memgpt.interface import AgentInterface
+from memgpt.metadata import MetadataStore
+from memgpt.models.pydantic_models import HumanModel, PersonaModel
+from memgpt.presets.utils import load_all_presets, load_yaml_file
+from memgpt.prompts import gpt_system
+from memgpt.utils import (
+    get_human_text,
+    get_persona_text,
+    list_human_files,
+    list_persona_files,
+    printd,
+)
 
 available_presets = load_all_presets()
 preset_options = list(available_presets.keys())
@@ -60,6 +65,25 @@ def create_preset_from_file(filename: str, name: str, user_id: uuid.UUID, ms: Me
     return preset
 
 
+def load_preset(preset_name: str, user_id: uuid.UUID):
+    preset_config = available_presets[preset_name]
+    preset_system_prompt = preset_config["system_prompt"]
+    preset_function_set_names = preset_config["functions"]
+    functions_schema = generate_functions_json(preset_function_set_names)
+
+    preset = Preset(
+        user_id=user_id,
+        name=preset_name,
+        system=gpt_system.get_system_text(preset_system_prompt),
+        persona=get_persona_text(DEFAULT_PERSONA),
+        persona_name=DEFAULT_PERSONA,
+        human=get_human_text(DEFAULT_HUMAN),
+        human_name=DEFAULT_HUMAN,
+        functions_schema=functions_schema,
+    )
+    return preset
+
+
 def add_default_presets(user_id: uuid.UUID, ms: MetadataStore):
     """Add the default presets to the metadata store"""
     # make sure humans/personas added
@@ -67,25 +91,11 @@ def add_default_presets(user_id: uuid.UUID, ms: MetadataStore):
 
     # add default presets
     for preset_name in preset_options:
-        preset_config = available_presets[preset_name]
-        preset_system_prompt = preset_config["system_prompt"]
-        preset_function_set_names = preset_config["functions"]
-        functions_schema = generate_functions_json(preset_function_set_names)
-
         if ms.get_preset(user_id=user_id, name=preset_name) is not None:
             printd(f"Preset '{preset_name}' already exists for user '{user_id}'")
             continue
 
-        preset = Preset(
-            user_id=user_id,
-            name=preset_name,
-            system=gpt_system.get_system_text(preset_system_prompt),
-            persona=get_persona_text(DEFAULT_PERSONA),
-            persona_name=DEFAULT_PERSONA,
-            human=get_human_text(DEFAULT_HUMAN),
-            human_name=DEFAULT_HUMAN,
-            functions_schema=functions_schema,
-        )
+        preset = load_preset(preset_name, user_id)
         ms.create_preset(preset)
 
 
@@ -142,12 +152,10 @@ def create_agent_from_preset(
     # available_presets = load_all_presets()
     # if preset_name not in available_presets:
     #    raise ValueError(f"Preset '{preset_name}.yaml' not found")
-
     # preset = available_presets[preset_name]
     # preset_system_prompt = preset["system_prompt"]
     # preset_function_set_names = preset["functions"]
     # preset_function_set_schemas = generate_functions_json(preset_function_set_names)
-
     # Override the following in the AgentState:
     #   persona: str  # the current persona text
     #   human: str  # the current human text

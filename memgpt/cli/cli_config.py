@@ -1,37 +1,46 @@
 import builtins
 import os
 import uuid
-from typing import Annotated, Optional
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, Optional
 
 import questionary
 import typer
-from prettytable import PrettyTable, SINGLE_BORDER
 from prettytable.colortable import ColorTable, Themes
 from tqdm import tqdm
 
 from memgpt import utils
 from memgpt.agent_store.storage import StorageConnector, TableType
 from memgpt.config import MemGPTConfig
-from memgpt.constants import LLM_MAX_TOKENS
-from memgpt.constants import MEMGPT_DIR
-from memgpt.credentials import MemGPTCredentials, SUPPORTED_AUTH_TYPES
-from memgpt.data_types import User, LLMConfig, EmbeddingConfig
-from memgpt.llm_api.openai import openai_get_model_list
+from memgpt.constants import LLM_MAX_TOKENS, MEMGPT_DIR
+from memgpt.credentials import SUPPORTED_AUTH_TYPES, MemGPTCredentials
+from memgpt.data_types import EmbeddingConfig, LLMConfig, Source, User
+from memgpt.llm_api.anthropic import (
+    anthropic_get_model_list,
+    antropic_get_model_context_window,
+)
 from memgpt.llm_api.azure_openai import azure_openai_get_model_list
-from memgpt.llm_api.google_ai import google_ai_get_model_list, google_ai_get_model_context_window
-from memgpt.llm_api.anthropic import anthropic_get_model_list, antropic_get_model_context_window
-from memgpt.llm_api.cohere import cohere_get_model_list, cohere_get_model_context_window, COHERE_VALID_MODEL_LIST
+from memgpt.llm_api.cohere import (
+    COHERE_VALID_MODEL_LIST,
+    cohere_get_model_context_window,
+    cohere_get_model_list,
+)
+from memgpt.llm_api.google_ai import (
+    google_ai_get_model_context_window,
+    google_ai_get_model_list,
+)
 from memgpt.llm_api.llm_api_tools import LLM_API_PROVIDER_OPTIONS
-from memgpt.local_llm.constants import DEFAULT_ENDPOINTS, DEFAULT_OLLAMA_MODEL, DEFAULT_WRAPPER_NAME
+from memgpt.llm_api.openai import openai_get_model_list
+from memgpt.local_llm.constants import (
+    DEFAULT_ENDPOINTS,
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_WRAPPER_NAME,
+)
 from memgpt.local_llm.utils import get_available_wrappers
-from memgpt.server.utils import shorten_key_middle
-from memgpt.data_types import User, LLMConfig, EmbeddingConfig, Source
 from memgpt.metadata import MetadataStore
-from memgpt.server.utils import shorten_key_middle
-from memgpt.models.pydantic_models import HumanModel, PersonaModel, PresetModel
+from memgpt.models.pydantic_models import HumanModel, PersonaModel
 from memgpt.presets.presets import create_preset_from_file
+from memgpt.server.utils import shorten_key_middle
 
 app = typer.Typer()
 
@@ -866,36 +875,6 @@ def configure_embedding_endpoint(config: MemGPTConfig, credentials: MemGPTCreden
     return embedding_endpoint_type, embedding_endpoint, embedding_dim, embedding_model
 
 
-def configure_cli(config: MemGPTConfig, credentials: MemGPTCredentials):
-    # set: preset, default_persona, default_human, default_agent``
-    from memgpt.presets.presets import preset_options
-
-    # preset
-    default_preset = config.preset if config.preset and config.preset in preset_options else None
-    preset = questionary.select("Select default preset:", preset_options, default=default_preset).ask()
-    if preset is None:
-        raise KeyboardInterrupt
-
-    # persona
-    personas = [os.path.basename(f).replace(".txt", "") for f in utils.list_persona_files()]
-    default_persona = config.persona if config.persona and config.persona in personas else None
-    persona = questionary.select("Select default persona:", personas, default=default_persona).ask()
-    if persona is None:
-        raise KeyboardInterrupt
-
-    # human
-    humans = [os.path.basename(f).replace(".txt", "") for f in utils.list_human_files()]
-    default_human = config.human if config.human and config.human in humans else None
-    human = questionary.select("Select default human:", humans, default=default_human).ask()
-    if human is None:
-        raise KeyboardInterrupt
-
-    # TODO: figure out if we should set a default agent or not
-    agent = None
-
-    return preset, persona, human, agent
-
-
 def configure_archival_storage(config: MemGPTConfig, credentials: MemGPTCredentials):
     # Configure archival storage backend
     archival_storage_options = ["postgres", "chroma"]
@@ -991,10 +970,6 @@ def configure():
             config=config,
             credentials=credentials,
         )
-        default_preset, default_persona, default_human, default_agent = configure_cli(
-            config=config,
-            credentials=credentials,
-        )
         archival_storage_type, archival_storage_uri, archival_storage_path = configure_archival_storage(
             config=config,
             credentials=credentials,
@@ -1025,10 +1000,6 @@ def configure():
             embedding_dim=embedding_dim,
             embedding_model=embedding_model,
         ),
-        # cli configs
-        preset=default_preset,
-        persona=default_persona,
-        human=default_human,
         # storage
         archival_storage_type=archival_storage_type,
         archival_storage_uri=archival_storage_uri,
@@ -1051,7 +1022,6 @@ def configure():
     user_id = uuid.UUID(config.anon_clientid)
     user = User(
         id=uuid.UUID(config.anon_clientid),
-        default_agent=default_agent,
     )
     if ms.get_user(user_id):
         # update user
@@ -1176,9 +1146,28 @@ def add(
         with open(filename, "r") as f:
             text = f.read()
     if option == "persona":
-        ms.add_persona(PersonaModel(name=name, text=text, user_id=user_id))
+        persona = ms.get_persona(name=name, user_id=user_id)
+        if persona:
+            # config if user wants to overwrite
+            if not questionary.confirm(f"Persona {name} already exists. Overwrite?").ask():
+                return
+            persona.text = text
+            ms.update_persona(persona)
+        else:
+            persona = PersonaModel(name=name, text=text, user_id=user_id)
+            ms.add_persona(persona)
+
     elif option == "human":
-        ms.add_human(HumanModel(name=name, text=text, user_id=user_id))
+        human = ms.get_human(name=name, user_id=user_id)
+        if human:
+            # config if user wants to overwrite
+            if not questionary.confirm(f"Human {name} already exists. Overwrite?").ask():
+                return
+            human.text = text
+            ms.update_human(human)
+        else:
+            human = HumanModel(name=name, text=text, user_id=user_id)
+            ms.add_human(HumanModel(name=name, text=text, user_id=user_id))
     elif option == "preset":
         assert filename, "Must specify filename for preset"
         create_preset_from_file(filename, name, user_id, ms)
@@ -1228,15 +1217,22 @@ def delete(option: str, name: str):
             ms.delete_agent(agent_id=agent.id)
 
         elif option == "human":
+            human = ms.get_human(name=name, user_id=user_id)
+            assert human is not None, f"Human {name} does not exist"
             ms.delete_human(name=name, user_id=user_id)
         elif option == "persona":
+            persona = ms.get_persona(name=name, user_id=user_id)
+            assert persona is not None, f"Persona {name} does not exist"
             ms.delete_persona(name=name, user_id=user_id)
+            assert ms.get_persona(name=name, user_id=user_id) is None, f"Persona {name} still exists"
         elif option == "preset":
+            preset = ms.get_preset(name=name, user_id=user_id)
+            assert preset is not None, f"Preset {name} does not exist"
             ms.delete_preset(name=name, user_id=user_id)
         else:
             raise ValueError(f"Option {option} not implemented")
 
-        typer.secho(f"Deleted source '{name}'", fg=typer.colors.GREEN)
+        typer.secho(f"Deleted {option} '{name}'", fg=typer.colors.GREEN)
 
     except Exception as e:
-        typer.secho(f"Failed to deleted source '{name}'\n{e}", fg=typer.colors.RED)
+        typer.secho(f"Failed to delete {option}'{name}'\n{e}", fg=typer.colors.RED)
