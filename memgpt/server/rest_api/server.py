@@ -5,12 +5,12 @@ import secrets
 import subprocess
 from typing import Optional
 
+import typer
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.middleware.cors import CORSMiddleware
 
-from memgpt.config import MemGPTConfig
 from memgpt.server.constants import REST_DEFAULT_PORT
 from memgpt.server.rest_api.admin.users import setup_admin_router
 from memgpt.server.rest_api.agents.command import setup_agents_command_router
@@ -23,7 +23,9 @@ from memgpt.server.rest_api.config.index import setup_config_index_router
 from memgpt.server.rest_api.humans.index import setup_humans_index_router
 from memgpt.server.rest_api.interface import QueuingInterface
 from memgpt.server.rest_api.models.index import setup_models_index_router
-from memgpt.server.rest_api.openai_assistants.assistants import setup_openai_assistant_router
+from memgpt.server.rest_api.openai_assistants.assistants import (
+    setup_openai_assistant_router,
+)
 from memgpt.server.rest_api.personas.index import setup_personas_index_router
 from memgpt.server.rest_api.presets.index import setup_presets_index_router
 from memgpt.server.rest_api.sources.index import setup_sources_index_router
@@ -49,7 +51,7 @@ if password := settings.server_pass:
 else:
     # Autogenerate a password for this session and dump it to stdout
     password = secrets.token_urlsafe(16)
-    print(f"Generated admin server password for this session: {password}")
+    typer.secho(f"Generated admin server password for this session: {password}", fg=typer.colors.GREEN)
 
 security = HTTPBearer()
 
@@ -114,11 +116,6 @@ def on_startup():
     if app.openapi_schema:
         app.openapi_schema["servers"] = [{"url": host} for host in settings.cors_origins]
         app.openapi_schema["info"]["title"] = "MemGPT API"
-
-    # Write out the OpenAPI schema to a file
-    # with open("openapi.json", "w") as file:
-    #     print(f"Writing out openapi.json file")
-    #     json.dump(app.openapi_schema, file, indent=2)
 
     # Split the API docs into MemGPT API, and OpenAI Assistants compatible API
     memgpt_api = app.openapi_schema.copy()

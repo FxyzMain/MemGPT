@@ -18,7 +18,10 @@ from memgpt.models.chat_completion_response import (
     UsageStatistics,
 )
 from memgpt.models.embedding_response import EmbeddingResponse
-from memgpt.streaming_interface import AgentChunkStreamingInterface, AgentRefreshStreamingInterface
+from memgpt.streaming_interface import (
+    AgentChunkStreamingInterface,
+    AgentRefreshStreamingInterface,
+)
 from memgpt.utils import get_utc_time, smart_urljoin
 
 OPENAI_SSE_DONE = "[DONE]"
@@ -360,7 +363,7 @@ def openai_chat_completions_request(
     printd(f"Sending request to {url}")
     try:
         response = requests.post(url, headers=headers, json=data)
-        printd(f"response = {response}")
+        # printd(f"response = {response}, response.text = {response.text}")
         response.raise_for_status()  # Raises HTTPError for 4XX/5XX status
 
         response = response.json()  # convert to dict from string

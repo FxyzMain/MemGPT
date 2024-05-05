@@ -8,7 +8,14 @@ from sqlalchemy.ext.declarative import declarative_base
 from memgpt.agent_store.storage import StorageConnector, TableType
 from memgpt.constants import MAX_EMBEDDING_DIM
 from memgpt.credentials import MemGPTCredentials
-from memgpt.data_types import AgentState, EmbeddingConfig, LLMConfig, Message, Passage, User
+from memgpt.data_types import (
+    AgentState,
+    EmbeddingConfig,
+    LLMConfig,
+    Message,
+    Passage,
+    User,
+)
 from memgpt.embeddings import embedding_model, query_embedding
 from memgpt.metadata import MetadataStore
 from memgpt.settings import settings
@@ -129,8 +136,8 @@ def test_storage(
         model="gpt-4",
     )
     if storage_connector == "postgres":
-        TEST_MEMGPT_CONFIG.archival_storage_uri = settings.pg_uri
-        TEST_MEMGPT_CONFIG.recall_storage_uri = settings.pg_uri
+        TEST_MEMGPT_CONFIG.archival_storage_uri = settings.memgpt_pg_uri
+        TEST_MEMGPT_CONFIG.recall_storage_uri = settings.memgpt_pg_uri
         TEST_MEMGPT_CONFIG.archival_storage_type = "postgres"
         TEST_MEMGPT_CONFIG.recall_storage_type = "postgres"
     if storage_connector == "lancedb":
